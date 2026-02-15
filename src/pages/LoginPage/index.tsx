@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { jwtDecode } from "jwt-decode";
 
 // If you want Google login, keep it. Otherwise remove it.
 import { GoogleLogin, CredentialResponse } from "@react-oauth/google";

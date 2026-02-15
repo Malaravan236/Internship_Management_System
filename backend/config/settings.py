@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'rest_framework',
+    "rest_framework_simplejwt",
     'corsheaders',
 ]
 
@@ -45,6 +46,7 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
   "http://localhost:5173",
+  "http://127.0.0.1:5173",
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -130,7 +132,7 @@ REST_FRAMEWORK = {
 
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
 }
 

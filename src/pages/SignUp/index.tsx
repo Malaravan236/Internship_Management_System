@@ -1,287 +1,132 @@
-import React, { useState, useEffect } from "react";
-import {
-  getAuth,
-  createUserWithEmailAndPassword,
-  signInWithPopup,
-  GoogleAuthProvider,
-  updateProfile,
-  sendEmailVerification,
-  UserCredential,
-  User
-} from "firebase/auth";
-import { getFirestore, doc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { app } from "../../firebase/firebaseConfig";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { 
-  faEnvelope, 
-  faLock, 
-  faUser, 
-  faCheckCircle, 
-  faTimes,
-  faEnvelopeOpenText,
-  faCircleExclamation
-} from "@fortawesome/free-solid-svg-icons";
+import { Mail, Lock, User, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 
-interface ExtendedUserCredential extends UserCredential {
-  additionalUserInfo?: {
-    isNewUser: boolean;
-  };
-}
+const API_BASE =
+  (import.meta as any).env?.VITE_API_BASE_URL?.replace(/\/$/, "") ||
+  "http://127.0.0.1:8000/api";
+
+type RegisterResponse = {
+  access?: string;
+  refresh?: string;
+  user?: { id: string | number; username?: string; email?: string };
+  detail?: string;
+  message?: string;
+};
 
 const Signup: React.FC = () => {
+  const navigate = useNavigate();
+
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [username, setUsername] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-  const [verificationSent, setVerificationSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
 
-  // Auto-hide success message after 3 seconds (only if no verification is needed)
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (showSuccessPopup && !verificationSent) {
+    let timer: any;
+    if (showSuccessPopup) {
       timer = setTimeout(() => {
         setShowSuccessPopup(false);
-        navigate("/");
-        if (window.location.pathname === "/") {
-          window.location.reload();
-        }
-      }, 2000);
+        navigate("/login");
+      }, 1500);
     }
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [showSuccessPopup, navigate, verificationSent]);
-
-  // Check if email exists in manualUsers collection
-  const checkEmailExistsInManualUsers = async (email: string) => {
-    const db = getFirestore(app);
-    const manualUsersRef = collection(db, "manualUsers");
-    const q = query(manualUsersRef, where("email", "==", email));
-    const querySnapshot = await getDocs(q);
-    return !querySnapshot.empty;
-  };
-
-  const sendVerificationEmail = async (user: User) => {
-    try {
-      await sendEmailVerification(user);
-      setVerificationSent(true);
-      setSuccessMessage(`Verification email sent to ${email}. Please check your inbox.`);
-      setShowSuccessPopup(true);
-      
-      // Update Firestore with email verification status
-      const db = getFirestore(app);
-      await setDoc(doc(db, "manualUsers", user.uid), {
-        emailVerified: false
-      }, { merge: true });
-      
-      await setDoc(doc(db, "users", user.uid), {
-        emailVerified: false
-      }, { merge: true });
-    } catch (error: any) {
-      console.error("Error sending verification email:", error.message);
-      setError(`Failed to send verification email: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    return () => timer && clearTimeout(timer);
+  }, [showSuccessPopup, navigate]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccessMessage("");
+
+    if (!username.trim()) return setError("Username is required");
+    if (!email.trim()) return setError("Email is required");
+    if (!/\S+@\S+\.\S+/.test(email)) return setError("Please enter a valid email");
+    if (password.length < 6) return setError("Password must be at least 6 characters");
+    if (password !== confirmPassword) return setError("Passwords do not match");
+
     setIsLoading(true);
-    
-    // Validate password match
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      setIsLoading(false);
-      return;
-    }
-
-    // Validate password strength (at least 6 characters)
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long");
-      setIsLoading(false);
-      return;
-    }
-
-    const db = getFirestore(app);
 
     try {
-      // Check if email already exists in manualUsers collection only
-      const emailExists = await checkEmailExistsInManualUsers(email);
-      if (emailExists) {
-        setError("This email is already registered. Please use a different email or log in.");
-        setIsLoading(false);
+      // ✅ Change endpoint if your backend uses a different path
+      const res = await fetch(`${API_BASE}/auth/register/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: username.trim(),
+          email: email.trim(),
+          password,
+        }),
+      });
+
+      let data: RegisterResponse | any = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok) {
+        // Handle DRF validation errors {field:["msg"]}
+        if (data && typeof data === "object") {
+          const firstKey = Object.keys(data)[0];
+          const firstVal = (data as any)[firstKey];
+          const msg =
+            Array.isArray(firstVal) ? firstVal[0] : data.detail || data.message || "Signup failed";
+          setError(`${firstKey}: ${msg}`);
+        } else {
+          setError("Signup failed. Please try again.");
+        }
         return;
       }
 
-      const auth = getAuth(app);
-      
-      // Create user with email and password
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      
-      // Update user profile with username
-      if (username) {
-        await updateProfile(user, {
-          displayName: username
-        });
+      // ✅ Store token + user (if backend sends it)
+      if (data?.access) localStorage.setItem("access_token", data.access);
+      if (data?.refresh) localStorage.setItem("refresh_token", data.refresh);
+
+      if (data?.user) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+      } else {
+        // fallback
+        localStorage.setItem("user", JSON.stringify({ username, email }));
       }
 
-      // Store manual user data in the "manualUsers" collection
-      const userData = {
-        uid: user.uid,
-        email: user.email,
-        username: username,
-        createdAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString(),
-        authType: "manual",
-        emailVerified: user.emailVerified
-      };
-
-      // Store in the manualUsers collection
-      await setDoc(doc(db, "manualUsers", user.uid), userData);
-      
-      // Also store in the general users collection for compatibility
-      await setDoc(doc(db, "users", user.uid), {
-        ...userData,
-        authType: "manual"
-      });
-      
-      // Store user info in localStorage
-      localStorage.setItem("user", JSON.stringify({
-        ...userData,
-        authType: "manual"
-      }));
-      
-      // Show initial success message
       setSuccessMessage(`Account created successfully! Welcome, ${username}!`);
       setShowSuccessPopup(true);
-      
-      // Send verification email
-      await sendVerificationEmail(user);
-    } catch (error: any) {
-      console.error("Error signing up:", error.message);
-      
-      // Provide user-friendly error messages for common Firebase auth errors
-      if (error.code === 'auth/email-already-in-use') {
-        setError("This email is already in use. If you signed up with Google previously, please use Google sign-in.");
-      } else if (error.code === 'auth/invalid-email') {
-        setError("Please enter a valid email address.");
-      } else if (error.code === 'auth/weak-password') {
-        setError("Password should be at least 6 characters.");
-      } else {
-        setError(`Signup failed: ${error.message}`);
-      }
-      setIsLoading(false);
-    }
-  };
-
-  const handleGoogleSignup = async () => {
-    setIsLoading(true);
-    setError("");
-    const auth = getAuth(app);
-    const provider = new GoogleAuthProvider();
-    const db = getFirestore(app);
-
-    try {
-      const result = await signInWithPopup(auth, provider) as ExtendedUserCredential;
-      const user = result.user;
-      
-      // Check if this is a new user
-      const isNewUser = result.additionalUserInfo?.isNewUser;
-      
-      // Store Google user data in the "googleUsers" collection
-      const userData = {
-        uid: user.uid,
-        email: user.email,
-        username: user.displayName || `User_${user.uid.substring(0, 5)}`,
-        createdAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString(),
-        profilePicture: user.photoURL || "",
-        authType: "google",
-        emailVerified: user.emailVerified
-      };
-
-      // Store in the googleUsers collection
-      await setDoc(doc(db, "googleUsers", user.uid), userData, { merge: true });
-      
-      // Also store in the general users collection for compatibility
-      await setDoc(doc(db, "users", user.uid), {
-        ...userData,
-        authType: "google"
-      }, { merge: true });
-      
-      // Store user info in localStorage
-      localStorage.setItem("user", JSON.stringify({
-        ...userData,
-        authType: "google"
-      }));
-      
-      // Show success message
-      if (isNewUser) {
-        setSuccessMessage(`Account created successfully! Welcome, ${userData.username}!`);
-      } else {
-        setSuccessMessage(`Welcome back, ${userData.username}!`);
-      }
-      setShowSuccessPopup(true);
-    } catch (error: any) {
-      console.error("Error signing up with Google:", error.message);
-      if (error.code === 'auth/popup-closed-by-user') {
-        setError("Google sign-in was canceled.");
-      } else {
-        setError(`Signup failed: ${error.message}`);
-      }
+    } catch (err) {
+      console.error(err);
+      setError("Network error. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleGoogleSignup = () => {
+    // Firebase இல்லாம google login வேண்டும்னா backend OAuth வேண்டும்.
+    // இப்போதைக்கு disable.
+    setError("Google signup is not enabled (Firebase removed).");
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6 pt-20">
-      {/* Success Popup */}
       {showSuccessPopup && (
         <div className="fixed top-4 right-4 z-50 bg-white rounded-lg shadow-lg max-w-md">
-          <div className="flex items-center p-4 border-l-4 border-teal-500">
-            <div className="flex-shrink-0">
-              <FontAwesomeIcon 
-                icon={verificationSent ? faEnvelopeOpenText : faCheckCircle} 
-                className={`h-5 w-5 ${verificationSent ? "text-blue-500" : "text-teal-500"}`} 
-              />
-            </div>
+          <div className="flex items-center p-4 border-l-4 border-emerald-500">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-800">{successMessage}</p>
-              {verificationSent && (
-                <p className="text-xs mt-1 text-gray-600">
-                  Didn't receive the email? <button 
-                    onClick={() => {
-                      const user = getAuth().currentUser;
-                      if (user) sendVerificationEmail(user);
-                    }} 
-                    className="text-blue-500 hover:underline"
-                  >
-                    Resend
-                  </button>
-                </p>
-              )}
             </div>
-            <div className="ml-auto pl-3">
-              <button
-                onClick={() => {
-                  setShowSuccessPopup(false);
-                  if (!verificationSent) navigate("/");
-                }}
-                className="inline-flex text-gray-400 hover:text-gray-500 focus:outline-none"
-              >
-                <FontAwesomeIcon icon={faTimes} className="h-4 w-4" />
-              </button>
-            </div>
+            <button
+              onClick={() => setShowSuccessPopup(false)}
+              className="ml-auto pl-3 text-gray-400 hover:text-gray-600"
+              aria-label="close"
+            >
+              <XCircle className="h-5 w-5" />
+            </button>
           </div>
         </div>
       )}
@@ -291,14 +136,14 @@ const Signup: React.FC = () => {
         <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white p-10 flex flex-col justify-center items-center md:w-1/2">
           <h1 className="text-4xl font-bold mb-4">Intern Connect</h1>
           <p className="text-lg text-center mb-8">
-            Join our community of professionals and unlock your career potential.
+            Join our community and unlock your career potential.
           </p>
           <div className="bg-white bg-opacity-10 p-6 rounded-lg">
             <p className="italic mb-4">
-              "Signing up was the best career decision I made this year. The networking opportunities and resources are invaluable."
+              "Signing up was the best career decision I made this year."
             </p>
             <div className="flex items-center">
-              <div className="w-12 h-12 bg-gray-200 rounded-full mr-4"></div>
+              <div className="w-12 h-12 bg-gray-200 rounded-full mr-4" />
               <div>
                 <p className="font-semibold">Michael Chen</p>
                 <p className="text-sm">Software Developer</p>
@@ -307,7 +152,7 @@ const Signup: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Panel - Signup Form */}
+        {/* Right Panel */}
         <div className="p-10 flex flex-col justify-center md:w-1/2">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-800">Create Account</h1>
@@ -318,28 +163,19 @@ const Signup: React.FC = () => {
             {error && (
               <div className="bg-red-50 border-l-4 border-red-500 p-4">
                 <div className="flex items-center">
-                  <FontAwesomeIcon 
-                    icon={faCircleExclamation} 
-                    className="text-red-500 mr-3" 
-                  />
+                  <AlertTriangle className="text-red-500 mr-3" />
                   <p className="text-red-700">{error}</p>
                 </div>
               </div>
             )}
-            
+
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                Username
-              </label>
+              <label className="block text-sm font-medium text-gray-700">Username</label>
               <div className="mt-1 relative">
-                <FontAwesomeIcon
-                  icon={faUser}
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
-                  id="username"
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="Choose a username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -349,18 +185,12 @@ const Signup: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email Address
-              </label>
+              <label className="block text-sm font-medium text-gray-700">Email Address</label>
               <div className="mt-1 relative">
-                <FontAwesomeIcon
-                  icon={faEnvelope}
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="email"
-                  id="email"
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="Your email address"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -370,18 +200,12 @@ const Signup: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
+              <label className="block text-sm font-medium text-gray-700">Password</label>
               <div className="mt-1 relative">
-                <FontAwesomeIcon
-                  icon={faLock}
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="password"
-                  id="password"
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="Create a password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -392,18 +216,12 @@ const Signup: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm Password
-              </label>
+              <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
               <div className="mt-1 relative">
-                <FontAwesomeIcon
-                  icon={faLock}
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="password"
-                  id="confirmPassword"
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="Confirm your password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -412,61 +230,31 @@ const Signup: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="terms"
-                className="h-4 w-4 text-teal-500 focus:ring-teal-500 border-gray-300 rounded"
-                required
-              />
-              <label htmlFor="terms" className="ml-2 text-sm text-gray-600">
-                I agree to the{" "}
-                <a href="/terms" className="text-teal-500 hover:text-teal-600">
-                  Terms of Service
-                </a>{" "}
-                and{" "}
-                <a href="/privacy" className="text-teal-500 hover:text-teal-600">
-                  Privacy Policy
-                </a>
-              </label>
-            </div>
-
             <button
               type="submit"
-              className={`w-full flex justify-center items-center bg-teal-500 text-white py-2 px-4 rounded-md hover:bg-teal-600 transition duration-200 ${isLoading ? "opacity-75 cursor-not-allowed" : ""}`}
+              className={`w-full flex justify-center items-center bg-teal-500 text-white py-2 px-4 rounded-md hover:bg-teal-600 transition ${
+                isLoading ? "opacity-75 cursor-not-allowed" : ""
+              }`}
               disabled={isLoading}
             >
-              {isLoading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Creating Account...
-                </>
-              ) : (
-                "Create Account"
-              )}
+              {isLoading ? "Creating Account..." : "Create Account"}
             </button>
 
             <div className="flex items-center my-6">
-              <div className="flex-grow border-t border-gray-300"></div>
-              <span className="mx-4 text-gray-500">or continue with</span>
-              <div className="flex-grow border-t border-gray-300"></div>
+              <div className="flex-grow border-t border-gray-300" />
+              <span className="mx-4 text-gray-500">or</span>
+              <div className="flex-grow border-t border-gray-300" />
             </div>
 
             <button
               type="button"
-              className={`w-full flex items-center justify-center bg-white border border-gray-300 rounded-md py-2 px-4 hover:bg-gray-50 transition duration-200 ${isLoading ? "opacity-75 cursor-not-allowed" : ""}`}
+              className={`w-full flex items-center justify-center bg-white border border-gray-300 rounded-md py-2 px-4 hover:bg-gray-50 transition ${
+                isLoading ? "opacity-75 cursor-not-allowed" : ""
+              }`}
               onClick={handleGoogleSignup}
               disabled={isLoading}
             >
-              <img
-                src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/800px-Google_%22G%22_logo.svg.png"
-                alt="Google logo"
-                className="w-5 h-5 mr-2"
-              />
-              {isLoading ? "Signing in..." : "Continue with Google"}
+              Continue with Google (Disabled)
             </button>
 
             <div className="text-center text-sm text-gray-600 mt-6">

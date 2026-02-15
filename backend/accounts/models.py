@@ -21,7 +21,11 @@ class User(AbstractUser):
 
 
 class StudentProfile(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="student_profile")
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="student_profile",
+    )
     college = models.CharField(max_length=150, blank=True)
     course = models.CharField(max_length=120, blank=True)
     graduation_year = models.CharField(max_length=10, blank=True)
@@ -31,7 +35,11 @@ class StudentProfile(models.Model):
 
 
 class CompanyProfile(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="company_profile")
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="company_profile",
+    )
     company_name = models.CharField(max_length=200, blank=True)
     website = models.URLField(blank=True)
     city = models.CharField(max_length=100, blank=True)
@@ -52,7 +60,6 @@ class Internship(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
 
-    # store skills as comma separated string (simple)
     required_skills = models.TextField(blank=True, help_text="Comma separated skills")
 
     number_of_positions = models.PositiveIntegerField(default=1)
@@ -64,7 +71,9 @@ class Internship(models.Model):
     duration = models.CharField(max_length=80, blank=True)
     work_hours = models.CharField(max_length=80, blank=True)
 
-    location_type = models.CharField(max_length=10, choices=LocationType.choices, default=LocationType.REMOTE)
+    location_type = models.CharField(
+        max_length=10, choices=LocationType.choices, default=LocationType.REMOTE
+    )
     city = models.CharField(max_length=100, blank=True)
     state = models.CharField(max_length=100, blank=True)
     address = models.TextField(blank=True)
@@ -73,6 +82,8 @@ class Internship(models.Model):
     stipend_amount = models.CharField(max_length=50, blank=True)
     payment_mode = models.CharField(max_length=50, blank=True)
 
+    required_skills = models.TextField()
+    
     application_start_date = models.DateField(null=True, blank=True)
     application_deadline = models.DateField(null=True, blank=True)
 
@@ -82,12 +93,20 @@ class Internship(models.Model):
 
     require_resume = models.BooleanField(default=True)
     internship_image_url = models.URLField(blank=True)
+    
+    skills = models.TextField(blank=True)
+    experience = models.TextField(blank=True)
+    agree_to_terms = models.BooleanField(default=False)
+
 
     is_active = models.BooleanField(default=True)
 
-    # who created it (company/admin)
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_internships"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_internships",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -107,8 +126,12 @@ class Application(models.Model):
         REJECTED = "rejected", "Rejected"
         COMPLETED = "completed", "Completed"
 
-    internship = models.ForeignKey(Internship, on_delete=models.CASCADE, related_name="applications")
-    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="applications")
+    internship = models.ForeignKey(
+        Internship, on_delete=models.CASCADE, related_name="applications"
+    )
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="applications"
+    )
 
     full_name = models.CharField(max_length=150)
     email = models.EmailField()
@@ -119,25 +142,40 @@ class Application(models.Model):
     graduation_year = models.CharField(max_length=10, blank=True)
 
     cover_letter = models.TextField(blank=True)
+
+    # IMPORTANT: this name must match serializer/frontend mapping
     resume_drive_link = models.URLField(blank=True)
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
     applied_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ("internship", "student")  # same student cannot apply twice
+        constraints = [
+            models.UniqueConstraint(
+                fields=["internship", "student"],
+                name="unique_application_per_student",
+            )
+        ]
 
     def __str__(self):
         return f"{self.student.username} -> {self.internship.title} ({self.status})"
 
 
 class ApplicationStatusHistory(models.Model):
-    application = models.ForeignKey(Application, on_delete=models.CASCADE, related_name="status_history")
+    application = models.ForeignKey(
+        Application, on_delete=models.CASCADE, related_name="status_history"
+    )
     old_status = models.CharField(max_length=20)
     new_status = models.CharField(max_length=20)
 
     changed_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="status_changes"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="status_changes",
     )
     changed_at = models.DateTimeField(auto_now_add=True)
 
@@ -146,7 +184,7 @@ class ApplicationStatusHistory(models.Model):
 
 
 # -------------------------
-# 4) DOCUMENTS (Resume/Transcript)
+# 4) DOCUMENTS
 # -------------------------
 class Document(models.Model):
     class DocType(models.TextChoices):
@@ -154,10 +192,12 @@ class Document(models.Model):
         TRANSCRIPT = "transcript", "Transcript"
         OTHER = "other", "Other"
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="documents")
-    doc_type = models.CharField(max_length=20, choices=DocType.choices, default=DocType.RESUME)
-
-    # store file url (if using S3/Cloudinary) OR use FileField if local
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="documents"
+    )
+    doc_type = models.CharField(
+        max_length=20, choices=DocType.choices, default=DocType.RESUME
+    )
     file_url = models.URLField(blank=True)
 
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -168,10 +208,12 @@ class Document(models.Model):
 
 
 # -------------------------
-# 5) CERTIFICATES + VERIFY TOKEN
+# 5) CERTIFICATES
 # -------------------------
 class Certificate(models.Model):
-    application = models.OneToOneField(Application, on_delete=models.CASCADE, related_name="certificate")
+    application = models.OneToOneField(
+        Application, on_delete=models.CASCADE, related_name="certificate"
+    )
 
     certificate_no = models.CharField(max_length=30, unique=True)
     issued_at = models.DateTimeField(default=timezone.now)
@@ -187,7 +229,9 @@ class Certificate(models.Model):
 # 6) NOTIFICATIONS
 # -------------------------
 class Notification(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications"
+    )
     title = models.CharField(max_length=150)
     message = models.TextField(blank=True)
 
@@ -199,16 +243,25 @@ class Notification(models.Model):
 
 
 # -------------------------
-# 7) SAVED INTERNSHIPS + (optional) ANALYTICS
+# 7) SAVED INTERNSHIPS
 # -------------------------
 class SavedInternship(models.Model):
-    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="saved_internships")
-    internship = models.ForeignKey(Internship, on_delete=models.CASCADE, related_name="saved_by")
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="saved_internships"
+    )
+    internship = models.ForeignKey(
+        Internship, on_delete=models.CASCADE, related_name="saved_by"
+    )
 
     saved_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ("student", "internship")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student", "internship"],
+                name="unique_saved_internship",
+            )
+        ]
 
     def __str__(self):
         return f"{self.student.username} saved {self.internship.title}"

@@ -115,7 +115,8 @@ function mapInternship(raw: any): Internship {
     coordinatorEmail: raw?.coordinatorEmail ?? raw?.coordinator_email ?? "",
     coordinatorPhone: raw?.coordinatorPhone ?? raw?.coordinator_phone ?? "",
     requireResume: Boolean(raw?.requireResume ?? raw?.require_resume ?? true),
-    internshipImageUrl: raw?.internshipImageUrl ?? raw?.internship_image_url ?? "",
+    internshipImageUrl:
+      raw?.internshipImageUrl ?? raw?.internship_image_url ?? "",
     isActive: raw?.isActive ?? raw?.is_active ?? true,
   };
 }
@@ -125,13 +126,12 @@ export default function InternshipListings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedInternship, setSelectedInternship] = useState<Internship | null>(
-    null
-  );
+  const [selectedInternship, setSelectedInternship] =
+    useState<Internship | null>(null);
   const [showApplyForm, setShowApplyForm] = useState(false);
-  const [expandedInternshipId, setExpandedInternshipId] = useState<string | null>(
-    null
-  );
+  const [expandedInternshipId, setExpandedInternshipId] = useState<
+    string | null
+  >(null);
 
   const [formData, setFormData] = useState<ApplicationFormData>({
     fullName: "",
@@ -201,13 +201,8 @@ export default function InternshipListings() {
       const list = Array.isArray(data) ? data : data?.results ?? [];
       const mapped = list.map(mapInternship);
 
-      // ✅ no TS error
-      // const active = mapped.filter((i) => i.isActive !== false);
-      // setInternships(active);
-
       const active = mapped.filter((i: Internship) => i.isActive !== false);
-setInternships(active);
-
+      setInternships(active);
     } catch (e) {
       console.error(e);
       setError("Failed to load internships. Please try again later.");
@@ -226,7 +221,9 @@ setInternships(active);
   }, []);
 
   const toggleInternshipDetails = (internshipId: string) => {
-    setExpandedInternshipId((prev) => (prev === internshipId ? null : internshipId));
+    setExpandedInternshipId((prev) =>
+      prev === internshipId ? null : internshipId
+    );
   };
 
   const handleApply = (internship: Internship) => {
@@ -264,7 +261,9 @@ setInternships(active);
   const closeLoginAlert = () => setShowLoginAlert(false);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
   ) => {
     const { name, value, type } = e.target;
     const checked =
@@ -300,7 +299,8 @@ setInternships(active);
     else if (!formData.resumeDriveLink.includes("drive.google.com"))
       newErrors.resumeDriveLink = "Please provide a valid Google Drive link";
 
-    if (!formData.agreeToTerms) newErrors.agreeToTerms = "You must agree to the terms";
+    if (!formData.agreeToTerms)
+      newErrors.agreeToTerms = "You must agree to the terms";
 
     setFormErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -308,80 +308,75 @@ setInternships(active);
 
   // ✅ IMPORTANT: Submit to Django API (/api/applications/)
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  if (!validateForm()) return;
+    if (!validateForm()) return;
 
-  if (!selectedInternship?.id) {
-    setFormErrors((prev) => ({
-      ...prev,
-      submit: "Internship not selected.",
-    }));
-    return;
-  }
-
-  const token = localStorage.getItem("access_token");
-  if (!token) {
-    setShowLoginAlert(true);
-    return;
-  }
-
-  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-
-  if (!storedUser?.id && !storedUser?.uid) {
-    setFormErrors((prev) => ({
-      ...prev,
-      submit: "User not found. Please login again.",
-    }));
-    return;
-  }
-
-  setSubmitting(true);
-  setFormErrors((prev) => ({ ...prev, submit: "" }));
-
-  try {
-    const applicationData = {
-      internship: selectedInternship.id,
-      student: storedUser.id || storedUser.uid,  // ✅ VERY IMPORTANT
-      full_name: formData.fullName,
-      email: formData.email,
-      phone: formData.phone,
-      college: formData.college,
-      course: formData.course,
-      graduation_year: formData.graduationYear,
-      cover_letter: formData.coverLetter,
-      resume_link: formData.resumeDriveLink,
-      agree_to_terms: formData.agreeToTerms,
-    };
-
-    const res = await fetch(`${API_BASE}/applications/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(applicationData),
-    });
-
-    if (!res.ok) {
-      const errorData = await res.json();
-      setFormErrors({
-        submit: JSON.stringify(errorData),
-      });
+    if (!selectedInternship?.id) {
+      setFormErrors((prev) => ({
+        ...prev,
+        submit: "Internship not selected.",
+      }));
       return;
     }
 
-    setSubmitted(true);
-  } catch (err) {
-    console.error(err);
-    setFormErrors({
-      submit: "Network error. Please try again.",
-    });
-  } finally {
-    setSubmitting(false);
-  }
-};
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setShowLoginAlert(true);
+      return;
+    }
 
+    setSubmitting(true);
+    setFormErrors((prev) => ({ ...prev, submit: "" }));
+
+    try {
+      // ✅ Backend should set student from token (request.user)
+      const applicationData = {
+        internship: selectedInternship.id,
+
+        full_name: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        college: formData.college,
+        course: formData.course,
+        graduation_year: formData.graduationYear,
+        cover_letter: formData.coverLetter,
+        resume_link: formData.resumeDriveLink,
+        agree_to_terms: formData.agreeToTerms,
+      };
+
+      const res = await fetch(`${API_BASE}/applications/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(applicationData),
+      });
+
+      if (!res.ok) {
+        let msg = "Failed to submit application.";
+        try {
+          const errorData = await res.json();
+          msg =
+            typeof errorData === "string" ? errorData : JSON.stringify(errorData);
+        } catch {
+          // ignore json parse error
+        }
+        setFormErrors({ submit: msg });
+        return;
+      }
+
+      setSubmitted(true);
+    } catch (err) {
+      console.error(err);
+      setFormErrors({
+        submit: "Network error. Please try again.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "-";
@@ -428,7 +423,9 @@ setInternships(active);
 
       {internships.length === 0 ? (
         <div className="bg-gray-50 border border-gray-200 p-8 rounded-lg text-center">
-          <p className="text-gray-600 text-lg">No internships available at the moment.</p>
+          <p className="text-gray-600 text-lg">
+            No internships available at the moment.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -487,7 +484,9 @@ setInternships(active);
                   {internship.internshipTitle}
                 </h2>
 
-                <p className="text-gray-600 mb-4 line-clamp-3">{internship.description}</p>
+                <p className="text-gray-600 mb-4 line-clamp-3">
+                  {internship.description}
+                </p>
 
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center text-sm text-gray-600">
@@ -620,7 +619,9 @@ setInternships(active);
                       <h3 className="font-medium text-gray-800 mb-2">Application</h3>
                       <div className="flex items-center text-sm text-gray-600">
                         <FileText size={16} className="mr-2 text-emerald-600" />
-                        <span>Resume Required: {internship.requireResume ? "Yes" : "No"}</span>
+                        <span>
+                          Resume Required: {internship.requireResume ? "Yes" : "No"}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -658,7 +659,9 @@ setInternships(active);
 
             <div className="bg-gradient-to-r from-emerald-600 to-teal-700 py-6 px-8 rounded-t-xl">
               <h2 className="text-2xl font-bold text-white">Apply for Internship</h2>
-              <p className="text-emerald-100 mt-2">{selectedInternship.internshipTitle}</p>
+              <p className="text-emerald-100 mt-2">
+                {selectedInternship.internshipTitle}
+              </p>
             </div>
 
             <div className="p-6">
@@ -894,7 +897,9 @@ setInternships(active);
             <h2 className="text-2xl font-bold text-gray-800 mb-3">
               Authentication Required
             </h2>
-            <p className="text-gray-600 mb-6">Please sign in to apply for internships.</p>
+            <p className="text-gray-600 mb-6">
+              Please sign in to apply for internships.
+            </p>
             <div className="flex justify-center gap-4">
               <button
                 onClick={closeLoginAlert}
