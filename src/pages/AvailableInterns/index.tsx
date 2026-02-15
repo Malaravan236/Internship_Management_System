@@ -331,19 +331,31 @@ export default function InternshipListings() {
 
     try {
       // ✅ Backend should set student from token (request.user)
-      const applicationData = {
-        internship: selectedInternship.id,
+      // const applicationData = {
+      //   internship: selectedInternship.id,
 
-        full_name: formData.fullName,
-        email: formData.email,
-        phone: formData.phone,
-        college: formData.college,
-        course: formData.course,
-        graduation_year: formData.graduationYear,
-        cover_letter: formData.coverLetter,
-        resume_link: formData.resumeDriveLink,
-        agree_to_terms: formData.agreeToTerms,
-      };
+      //   full_name: formData.fullName,
+      //   email: formData.email,
+      //   phone: formData.phone,
+      //   college: formData.college,
+      //   course: formData.course,
+      //   graduation_year: formData.graduationYear,
+      //   cover_letter: formData.coverLetter,
+      //   resume_link: formData.resumeDriveLink,
+      //   agree_to_terms: formData.agreeToTerms,
+      // };
+
+      const applicationData = {
+  internship: selectedInternship.id,
+  full_name: formData.fullName,
+  email: formData.email,
+  phone: formData.phone,
+  college: formData.college,
+  course: formData.course,
+  graduation_year: formData.graduationYear,
+  cover_letter: formData.coverLetter,
+  resume_link: formData.resumeDriveLink,
+};
 
       const res = await fetch(`${API_BASE}/applications/`, {
         method: "POST",
