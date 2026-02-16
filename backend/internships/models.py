@@ -8,6 +8,9 @@ class Internship(models.Model):
     stipend = models.IntegerField()
     location = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
+    # image_url = models.URLField(blank=True, null=True)
+    image = models.ImageField(upload_to="internships/", null=True, blank=True)
+
 
     def __str__(self):
         return self.title

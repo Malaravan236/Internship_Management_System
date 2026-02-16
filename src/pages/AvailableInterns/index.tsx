@@ -15,9 +15,11 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE_URL?.replace(/\/$/, "") ||
   "http://127.0.0.1:8000/api";
+ 
 
 interface Internship {
   id: string;
@@ -75,13 +77,29 @@ function safeJsonParse<T>(value: string | null, fallback: T): T {
   }
 }
 
-// ✅ Map backend fields to UI fields
+/** ✅ Backend response console screenshot la title / description varuthu
+ * so mapInternship MUST pick raw.title too
+ */
 function mapInternship(raw: any): Internship {
+  const rawImage =
+    raw?.internshipImageUrl ??
+    raw?.internship_image_url ??
+    raw?.internship_image ??
+    raw?.image_url ??
+    raw?.imageUrl ??
+    raw?.image ??
+    "";
+
   return {
     id: String(raw?.id ?? raw?._id ?? ""),
     internshipTitle:
-      raw?.internshipTitle ?? raw?.title ?? raw?.name ?? "Untitled Internship",
+      raw?.internshipTitle ??
+      raw?.title ?? // ✅ your API shows "title"
+      raw?.name ??
+      "Untitled Internship",
+
     description: raw?.description ?? "",
+
     requiredSkills: Array.isArray(raw?.requiredSkills)
       ? raw.requiredSkills
       : typeof raw?.requiredSkills === "string"
@@ -89,9 +107,15 @@ function mapInternship(raw: any): Internship {
           .split(",")
           .map((s: string) => s.trim())
           .filter(Boolean)
+      : typeof raw?.skills === "string"
+      ? raw.skills
+          .split(",")
+          .map((s: string) => s.trim())
+          .filter(Boolean)
       : [],
+
     numberOfPositions: String(raw?.numberOfPositions ?? raw?.positions ?? ""),
-    department: raw?.department ?? "",
+    department: raw?.department ?? raw?.dept ?? "",
     eligibilityCriteria: raw?.eligibilityCriteria ?? raw?.eligibility ?? "",
     startDate: raw?.startDate ?? raw?.start_date ?? "",
     endDate: raw?.endDate ?? raw?.end_date ?? "",
@@ -115,13 +139,13 @@ function mapInternship(raw: any): Internship {
     coordinatorEmail: raw?.coordinatorEmail ?? raw?.coordinator_email ?? "",
     coordinatorPhone: raw?.coordinatorPhone ?? raw?.coordinator_phone ?? "",
     requireResume: Boolean(raw?.requireResume ?? raw?.require_resume ?? true),
-    internshipImageUrl:
-      raw?.internshipImageUrl ?? raw?.internship_image_url ?? "",
+
+    internshipImageUrl: String(rawImage ?? ""),
     isActive: raw?.isActive ?? raw?.is_active ?? true,
   };
 }
 
-export default function InternshipListings() {
+export default function AvailableInterns() {
   const [internships, setInternships] = useState<Internship[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +177,6 @@ export default function InternshipListings() {
   const navigate = useNavigate();
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
 
-  // ✅ Load student info from localStorage (set in Login page)
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (!storedUser) return;
@@ -200,8 +223,8 @@ export default function InternshipListings() {
       const data = await res.json();
       const list = Array.isArray(data) ? data : data?.results ?? [];
       const mapped = list.map(mapInternship);
-
       const active = mapped.filter((i: Internship) => i.isActive !== false);
+
       setInternships(active);
     } catch (e) {
       console.error(e);
@@ -306,7 +329,6 @@ export default function InternshipListings() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // ✅ IMPORTANT: Submit to Django API (/api/applications/)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -330,32 +352,17 @@ export default function InternshipListings() {
     setFormErrors((prev) => ({ ...prev, submit: "" }));
 
     try {
-      // ✅ Backend should set student from token (request.user)
-      // const applicationData = {
-      //   internship: selectedInternship.id,
-
-      //   full_name: formData.fullName,
-      //   email: formData.email,
-      //   phone: formData.phone,
-      //   college: formData.college,
-      //   course: formData.course,
-      //   graduation_year: formData.graduationYear,
-      //   cover_letter: formData.coverLetter,
-      //   resume_link: formData.resumeDriveLink,
-      //   agree_to_terms: formData.agreeToTerms,
-      // };
-
       const applicationData = {
-  internship: selectedInternship.id,
-  full_name: formData.fullName,
-  email: formData.email,
-  phone: formData.phone,
-  college: formData.college,
-  course: formData.course,
-  graduation_year: formData.graduationYear,
-  cover_letter: formData.coverLetter,
-  resume_link: formData.resumeDriveLink,
-};
+        internship: selectedInternship.id,
+        full_name: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        college: formData.college,
+        course: formData.course,
+        graduation_year: formData.graduationYear,
+        cover_letter: formData.coverLetter,
+        resume_link: formData.resumeDriveLink,
+      };
 
       const res = await fetch(`${API_BASE}/applications/`, {
         method: "POST",
@@ -372,9 +379,7 @@ export default function InternshipListings() {
           const errorData = await res.json();
           msg =
             typeof errorData === "string" ? errorData : JSON.stringify(errorData);
-        } catch {
-          // ignore json parse error
-        }
+        } catch {}
         setFormErrors({ submit: msg });
         return;
       }
@@ -382,9 +387,7 @@ export default function InternshipListings() {
       setSubmitted(true);
     } catch (err) {
       console.error(err);
-      setFormErrors({
-        submit: "Network error. Please try again.",
-      });
+      setFormErrors({ submit: "Network error. Please try again." });
     } finally {
       setSubmitting(false);
     }
@@ -441,223 +444,249 @@ export default function InternshipListings() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {internships.map((internship) => (
-            <div
-              key={internship.id}
-              className={`bg-white rounded-xl shadow-md overflow-hidden border border-gray-200 flex flex-col transition-all duration-200 ${
-                expandedInternshipId === internship.id
-                  ? "ring-2 ring-emerald-500"
-                  : "hover:shadow-lg"
-              }`}
-            >
-              {/* Image */}
+          {internships.map((internship) => {
+            const expanded = expandedInternshipId === internship.id;
+
+            return (
               <div
-                className="h-48 bg-gray-200 cursor-pointer"
-                onClick={() => toggleInternshipDetails(internship.id)}
+                key={internship.id}
+                className={`bg-white rounded-xl shadow-md overflow-hidden border border-gray-200 flex flex-col transition-all duration-200 ${
+                  expanded ? "ring-2 ring-emerald-500" : "hover:shadow-lg"
+                }`}
               >
-                {internship.internshipImageUrl ? (
-                  <img
-                    src={internship.internshipImageUrl}
-                    alt={internship.internshipTitle}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-emerald-50">
-                    <Briefcase size={48} className="text-emerald-300" />
-                  </div>
-                )}
-              </div>
+                
 
-              {/* Card Content */}
-              <div
-                className="p-6 flex-grow cursor-pointer"
-                onClick={() => toggleInternshipDetails(internship.id)}
-              >
-                <div className="mb-2 flex items-center">
-                  <span
-                    className={`px-2 py-1 text-xs font-medium rounded-full mr-2 ${
-                      internship.locationType === "remote"
-                        ? "bg-blue-100 text-blue-800"
-                        : internship.locationType === "onsite"
-                        ? "bg-orange-100 text-orange-800"
-                        : "bg-purple-100 text-purple-800"
-                    }`}
-                  >
-                    {internship.locationType.charAt(0).toUpperCase() +
-                      internship.locationType.slice(1)}
-                  </span>
-
-                  <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs font-medium rounded-full">
-                    {internship.department || "General"}
-                  </span>
-                </div>
-
-                <h2 className="text-xl font-bold text-gray-800 mb-2">
-                  {internship.internshipTitle}
-                </h2>
-
-                <p className="text-gray-600 mb-4 line-clamp-3">
-                  {internship.description}
-                </p>
-
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Calendar size={16} className="mr-2 text-emerald-600" />
-                    <span>Duration: {internship.duration || "-"}</span>
-                  </div>
-
-                  <div className="flex items-center text-sm text-gray-600">
-                    <DollarSign size={16} className="mr-2 text-emerald-600" />
-                    <span>
-                      {internship.isPaid
-                        ? `Stipend: ${internship.stipendAmount || "-"}`
-                        : "Unpaid Internship"}
+                {/* Card Content */}
+                <div
+                  className="p-6 flex-grow cursor-pointer"
+                  onClick={() => toggleInternshipDetails(internship.id)}
+                >
+                  <div className="mb-2 flex items-center">
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded-full mr-2 ${
+                        internship.locationType === "remote"
+                          ? "bg-blue-100 text-blue-800"
+                          : internship.locationType === "onsite"
+                          ? "bg-orange-100 text-orange-800"
+                          : "bg-purple-100 text-purple-800"
+                      }`}
+                    >
+                      {internship.locationType.charAt(0).toUpperCase() +
+                        internship.locationType.slice(1)}
                     </span>
-                    {internship.isPaid && internship.paymentMode && (
-                      <span className="ml-1">({internship.paymentMode})</span>
-                    )}
+
+                    <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs font-medium rounded-full">
+                      {internship.department || "General"}
+                    </span>
                   </div>
-                </div>
 
-                <div className="flex items-center text-emerald-600 text-sm font-medium">
-                  {expandedInternshipId === internship.id ? "Show Less" : "Show More"}
-                </div>
+                  <h2 className="text-xl font-bold text-gray-800 mb-2">
+                    {internship.internshipTitle}
+                  </h2>
 
-                {expandedInternshipId === internship.id && (
-                  <div className="mt-4 space-y-4 border-t pt-4">
-                    {/* Schedule */}
-                    <div>
-                      <h3 className="font-medium text-gray-800 mb-2">Schedule</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center text-sm text-gray-600">
-                          <Clock size={16} className="mr-2 text-emerald-600" />
-                          <span>
-                            Dates: {formatDate(internship.startDate)} -{" "}
-                            {formatDate(internship.endDate)}
-                          </span>
-                        </div>
-                        <div className="flex items-center text-sm text-gray-600">
-                          <Clock size={16} className="mr-2 text-emerald-600" />
-                          <span>Work Hours: {internship.workHours || "-"}</span>
-                        </div>
-                        <div className="flex items-center text-sm text-gray-600">
-                          <Calendar size={16} className="mr-2 text-emerald-600" />
-                          <span>
-                            Application: {formatDate(internship.applicationStartDate)} -{" "}
-                            {formatDate(internship.applicationDeadline)}
-                          </span>
-                        </div>
-                      </div>
+                  <p className="text-gray-600 mb-4 line-clamp-3">
+                    {internship.description}
+                  </p>
+
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center text-sm text-gray-600">
+                      <Calendar size={16} className="mr-2 text-emerald-600" />
+                      <span>Duration: {internship.duration || "-"}</span>
                     </div>
 
-                    {/* Location */}
-                    <div>
-                      <h3 className="font-medium text-gray-800 mb-2">Location</h3>
-                      <div className="flex items-start text-sm text-gray-600">
-                        <MapPin size={16} className="mr-2 text-emerald-600 mt-0.5" />
-                        <div>
-                          <p>
-                            {internship.locationType === "remote"
-                              ? "Remote"
-                              : internship.locationType === "onsite"
-                              ? `${internship.city}, ${internship.state}`
-                              : `Hybrid (${internship.city}, ${internship.state})`}
-                          </p>
-                          {internship.address && internship.locationType !== "remote" && (
-                            <p className="mt-1">{internship.address}</p>
+                    <div className="flex items-center text-sm text-gray-600">
+                      <DollarSign size={16} className="mr-2 text-emerald-600" />
+                      <span>
+                        {internship.isPaid
+                          ? `Stipend: ${internship.stipendAmount || "-"}`
+                          : "Unpaid Internship"}
+                      </span>
+                      {internship.isPaid && internship.paymentMode && (
+                        <span className="ml-1">({internship.paymentMode})</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ✅ Show More button (IMPORTANT stopPropagation) */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleInternshipDetails(internship.id);
+                    }}
+                    className="flex items-center text-emerald-600 text-sm font-medium hover:underline"
+                  >
+                    {expanded ? "Show Less" : "Show More"}
+                  </button>
+
+                  {/* ✅ Expanded content */}
+                  {expanded && (
+                    <div className="mt-4 space-y-4 border-t pt-4">
+                      {/* Schedule */}
+                      <div>
+                        <h3 className="font-medium text-gray-800 mb-2">
+                          Schedule
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Clock size={16} className="mr-2 text-emerald-600" />
+                            <span>
+                              Dates: {formatDate(internship.startDate)} -{" "}
+                              {formatDate(internship.endDate)}
+                            </span>
+                          </div>
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Clock size={16} className="mr-2 text-emerald-600" />
+                            <span>Work Hours: {internship.workHours || "-"}</span>
+                          </div>
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Calendar
+                              size={16}
+                              className="mr-2 text-emerald-600"
+                            />
+                            <span>
+                              Application:{" "}
+                              {formatDate(internship.applicationStartDate)} -{" "}
+                              {formatDate(internship.applicationDeadline)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Location */}
+                      <div>
+                        <h3 className="font-medium text-gray-800 mb-2">
+                          Location
+                        </h3>
+                        <div className="flex items-start text-sm text-gray-600">
+                          <MapPin
+                            size={16}
+                            className="mr-2 text-emerald-600 mt-0.5"
+                          />
+                          <div>
+                            <p>
+                              {internship.locationType === "remote"
+                                ? "Remote"
+                                : internship.locationType === "onsite"
+                                ? `${internship.city}, ${internship.state}`
+                                : `Hybrid (${internship.city}, ${internship.state})`}
+                            </p>
+                            {internship.address &&
+                              internship.locationType !== "remote" && (
+                                <p className="mt-1">{internship.address}</p>
+                              )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Requirements */}
+                      <div>
+                        <h3 className="font-medium text-gray-800 mb-2">
+                          Requirements
+                        </h3>
+
+                        <div className="space-y-2">
+                          <div className="text-sm text-gray-600">
+                            <p className="font-medium">Eligibility:</p>
+                            <p>
+                              {internship.eligibilityCriteria ||
+                                "Not specified"}
+                            </p>
+                          </div>
+
+                          <div className="text-sm text-gray-600">
+                            <p className="font-medium">
+                              Positions: {internship.numberOfPositions || "-"}
+                            </p>
+                          </div>
+
+                          <div>
+                            <h4 className="font-medium text-gray-800 mb-1">
+                              Skills:
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                              {(internship.requiredSkills || []).length === 0 ? (
+                                <span className="text-sm text-gray-500">-</span>
+                              ) : (
+                                internship.requiredSkills.map((skill, index) => (
+                                  <span
+                                    key={index}
+                                    className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full"
+                                  >
+                                    {skill}
+                                  </span>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Coordinator */}
+                      <div>
+                        <h3 className="font-medium text-gray-800 mb-2">
+                          Coordinator
+                        </h3>
+                        <div className="space-y-2 text-sm text-gray-600">
+                          <div className="flex items-center">
+                            <span className="font-medium mr-2">Name:</span>
+                            <span>{internship.coordinatorName || "-"}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <Mail size={16} className="mr-2 text-emerald-600" />
+                            <span>{internship.coordinatorEmail || "-"}</span>
+                          </div>
+                          {internship.coordinatorPhone && (
+                            <div className="flex items-center">
+                              <Phone
+                                size={16}
+                                className="mr-2 text-emerald-600"
+                              />
+                              <span>{internship.coordinatorPhone}</span>
+                            </div>
                           )}
                         </div>
                       </div>
-                    </div>
 
-                    {/* Requirements */}
-                    <div>
-                      <h3 className="font-medium text-gray-800 mb-2">Requirements</h3>
-                      <div className="space-y-2">
-                        <div className="text-sm text-gray-600">
-                          <p className="font-medium">Eligibility:</p>
-                          <p>{internship.eligibilityCriteria || "Not specified"}</p>
-                        </div>
-
-                        <div className="text-sm text-gray-600">
-                          <p className="font-medium">
-                            Positions: {internship.numberOfPositions || "-"}
-                          </p>
-                        </div>
-
-                        <div>
-                          <h4 className="font-medium text-gray-800 mb-1">Skills:</h4>
-                          <div className="flex flex-wrap gap-2">
-                            {(internship.requiredSkills || []).length === 0 ? (
-                              <span className="text-sm text-gray-500">-</span>
-                            ) : (
-                              internship.requiredSkills.map((skill, index) => (
-                                <span
-                                  key={index}
-                                  className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full"
-                                >
-                                  {skill}
-                                </span>
-                              ))
-                            )}
-                          </div>
+                      {/* Application Info */}
+                      <div>
+                        <h3 className="font-medium text-gray-800 mb-2">
+                          Application
+                        </h3>
+                        <div className="flex items-center text-sm text-gray-600">
+                          <FileText
+                            size={16}
+                            className="mr-2 text-emerald-600"
+                          />
+                          <span>
+                            Resume Required:{" "}
+                            {internship.requireResume ? "Yes" : "No"}
+                          </span>
                         </div>
                       </div>
                     </div>
+                  )}
+                </div>
 
-                    {/* Coordinator */}
-                    <div>
-                      <h3 className="font-medium text-gray-800 mb-2">Coordinator</h3>
-                      <div className="space-y-2 text-sm text-gray-600">
-                        <div className="flex items-center">
-                          <span className="font-medium mr-2">Name:</span>
-                          <span>{internship.coordinatorName || "-"}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Mail size={16} className="mr-2 text-emerald-600" />
-                          <span>{internship.coordinatorEmail || "-"}</span>
-                        </div>
-                        {internship.coordinatorPhone && (
-                          <div className="flex items-center">
-                            <Phone size={16} className="mr-2 text-emerald-600" />
-                            <span>{internship.coordinatorPhone}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Application Info */}
-                    <div>
-                      <h3 className="font-medium text-gray-800 mb-2">Application</h3>
-                      <div className="flex items-center text-sm text-gray-600">
-                        <FileText size={16} className="mr-2 text-emerald-600" />
-                        <span>
-                          Resume Required: {internship.requireResume ? "Yes" : "No"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* Apply Button */}
+                <div className="px-6 pb-6" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => handleApply(internship)}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    Apply Now
+                  </button>
+                  <p className="text-xs text-gray-500 text-center mt-2">
+                    Deadline: {formatDate(internship.applicationDeadline)}
+                  </p>
+                </div>
               </div>
-
-              {/* Apply Button */}
-              <div className="px-6 pb-6" onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => handleApply(internship)}
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
-                >
-                  Apply Now
-                </button>
-                <p className="text-xs text-gray-500 text-center mt-2">
-                  Deadline: {formatDate(internship.applicationDeadline)}
-                </p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* ✅ Application Modal (FULL FORM) */}
+      {/* ✅ Apply Modal */}
       {showApplyForm && selectedInternship && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl my-10 relative">
@@ -670,7 +699,9 @@ export default function InternshipListings() {
             </button>
 
             <div className="bg-gradient-to-r from-emerald-600 to-teal-700 py-6 px-8 rounded-t-xl">
-              <h2 className="text-2xl font-bold text-white">Apply for Internship</h2>
+              <h2 className="text-2xl font-bold text-white">
+                Apply for Internship
+              </h2>
               <p className="text-emerald-100 mt-2">
                 {selectedInternship.internshipTitle}
               </p>
@@ -697,7 +728,6 @@ export default function InternshipListings() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  {/* Full Name */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Full Name
@@ -710,11 +740,12 @@ export default function InternshipListings() {
                       placeholder="Your full name"
                     />
                     {formErrors.fullName && (
-                      <p className="text-sm text-red-600 mt-1">{formErrors.fullName}</p>
+                      <p className="text-sm text-red-600 mt-1">
+                        {formErrors.fullName}
+                      </p>
                     )}
                   </div>
 
-                  {/* Email */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Email
@@ -727,11 +758,12 @@ export default function InternshipListings() {
                       placeholder="example@gmail.com"
                     />
                     {formErrors.email && (
-                      <p className="text-sm text-red-600 mt-1">{formErrors.email}</p>
+                      <p className="text-sm text-red-600 mt-1">
+                        {formErrors.email}
+                      </p>
                     )}
                   </div>
 
-                  {/* Phone */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Phone
@@ -744,11 +776,12 @@ export default function InternshipListings() {
                       placeholder="10 digit number"
                     />
                     {formErrors.phone && (
-                      <p className="text-sm text-red-600 mt-1">{formErrors.phone}</p>
+                      <p className="text-sm text-red-600 mt-1">
+                        {formErrors.phone}
+                      </p>
                     )}
                   </div>
 
-                  {/* College */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       College / University
@@ -761,11 +794,12 @@ export default function InternshipListings() {
                       placeholder="Your college name"
                     />
                     {formErrors.college && (
-                      <p className="text-sm text-red-600 mt-1">{formErrors.college}</p>
+                      <p className="text-sm text-red-600 mt-1">
+                        {formErrors.college}
+                      </p>
                     )}
                   </div>
 
-                  {/* Course + Graduation Year */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -779,7 +813,9 @@ export default function InternshipListings() {
                         placeholder="B.E / B.Tech / MCA..."
                       />
                       {formErrors.course && (
-                        <p className="text-sm text-red-600 mt-1">{formErrors.course}</p>
+                        <p className="text-sm text-red-600 mt-1">
+                          {formErrors.course}
+                        </p>
                       )}
                     </div>
 
@@ -802,7 +838,6 @@ export default function InternshipListings() {
                     </div>
                   </div>
 
-                  {/* Cover Letter */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Cover Letter
@@ -816,11 +851,12 @@ export default function InternshipListings() {
                       placeholder="Why should we select you?"
                     />
                     {formErrors.coverLetter && (
-                      <p className="text-sm text-red-600 mt-1">{formErrors.coverLetter}</p>
+                      <p className="text-sm text-red-600 mt-1">
+                        {formErrors.coverLetter}
+                      </p>
                     )}
                   </div>
 
-                  {/* Resume Drive Link */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Resume Google Drive Link
@@ -842,7 +878,6 @@ export default function InternshipListings() {
                     </p>
                   </div>
 
-                  {/* Terms */}
                   <div className="flex items-start gap-2">
                     <input
                       type="checkbox"
@@ -863,14 +898,12 @@ export default function InternshipListings() {
                     </div>
                   </div>
 
-                  {/* Submit error */}
                   {formErrors.submit && (
                     <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">
                       {formErrors.submit}
                     </div>
                   )}
 
-                  {/* Buttons */}
                   <div className="flex justify-end pt-2">
                     <button
                       type="button"

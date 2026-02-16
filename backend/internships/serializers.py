@@ -25,7 +25,6 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "course",
             "graduation_year",
             "cover_letter",
-            "resume_drive_link",
             "resume_link",   # accept from frontend
             "status",
             "applied_at",
