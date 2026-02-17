@@ -206,6 +206,24 @@ class Document(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.doc_type}"
 
+# -------------------------
+# 5) FEEDBACK / REVIEW
+# -------------------------
+class Feedback(models.Model):
+    application = models.OneToOneField(
+        "Application", on_delete=models.CASCADE, related_name="feedback"
+    )
+    rating = models.PositiveSmallIntegerField()  # 1..5
+    comment = models.TextField(blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="feedbacks"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Feedback(app={self.application_id}, rating={self.rating})"
+
 
 # -------------------------
 # 5) CERTIFICATES
@@ -219,6 +237,8 @@ class Certificate(models.Model):
     issued_at = models.DateTimeField(default=timezone.now)
 
     pdf_url = models.URLField(blank=True)
+    pdf = models.FileField(upload_to="certificates/", blank=True, null=True)
+
     verify_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
     def __str__(self):

@@ -1,7 +1,22 @@
-from rest_framework import viewsets, permissions
-from rest_framework.permissions import IsAuthenticated
+from rest_framework import viewsets, permissions,status
+from rest_framework.permissions import IsAuthenticated,IsAdminUser
+from rest_framework.views import APIView
+from rest_framework.response import Response
 from accounts.models import Internship, Application
 from .serializers import InternshipSerializer, ApplicationSerializer
+from django.shortcuts import get_object_or_404
+
+from accounts.models import Internship, Application, Feedback, Certificate
+from .serializers import (
+    InternshipSerializer,
+    ApplicationSerializer,
+    FeedbackCreateSerializer,
+    CertificateSerializer,
+    ApplicationStatusSerializer,
+)
+from .services.certificate_service import attach_pdf_to_certificate
+
+
 
 class InternshipViewSet(viewsets.ModelViewSet):
     queryset = Internship.objects.all().order_by("-created_at")
@@ -15,3 +30,105 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(student=self.request.user)
+
+
+# ✅ Student submits feedback ONLY when status == completed
+class FeedbackCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        ser = FeedbackCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        app_id = ser.validated_data["application_id"]
+        application = get_object_or_404(Application, id=app_id)
+
+        # Only owner student
+        if application.student_id != request.user.id:
+            return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Must be completed
+        if application.status != "completed":
+            return Response({"detail": "Internship not completed yet."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Only one feedback
+        if hasattr(application, "feedback"):
+            return Response({"detail": "Feedback already submitted."}, status=status.HTTP_400_BAD_REQUEST)
+
+        feedback = Feedback.objects.create(
+            application=application,
+            rating=ser.validated_data["rating"],
+            comment=ser.validated_data.get("comment", ""),
+            created_by=request.user,
+        )
+
+        # Create certificate if not exists
+        cert, _ = Certificate.objects.get_or_create(
+            application=application,
+            defaults={"certificate_no": f"CERT-{application.id}-{request.user.id}"}
+        )
+
+        # Auto-generate PDF file if missing
+        if not cert.pdf:
+            student_name = application.full_name or request.user.username
+            internship_title = application.internship.title
+            attach_pdf_to_certificate(cert, student_name, internship_title)
+
+        return Response(
+            {
+                "message": "Feedback submitted. Certificate issued.",
+                "feedback": {"rating": feedback.rating, "comment": feedback.comment},
+                "certificate": CertificateSerializer(cert).data,
+            },
+            status=status.HTTP_201_CREATED
+        )    
+    
+
+# ✅ Student downloads/view own certificate by application_id
+class MyCertificateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, application_id: int):
+        application = get_object_or_404(Application, id=application_id)
+
+        if application.student_id != request.user.id:
+            return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
+
+        if not hasattr(application, "certificate"):
+            return Response({"detail": "Certificate not available yet."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(CertificateSerializer(application.certificate).data)
+
+# ✅ Public verify
+class VerifyCertificateAPIView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, token: str):
+        cert = Certificate.objects.filter(verify_token=token).select_related("application", "application__internship").first()
+        if not cert:
+            return Response({"valid": False}, status=status.HTTP_404_NOT_FOUND)
+
+        app = cert.application
+        return Response({
+            "valid": True,
+            "certificate_no": cert.certificate_no,
+            "issued_at": cert.issued_at,
+            "student_name": app.full_name,
+            "internship_title": app.internship.title,
+        })
+
+
+# ✅ Admin marks application completed (or any status)
+class AdminUpdateApplicationStatusAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def patch(self, request, application_id: int):
+        application = get_object_or_404(Application, id=application_id)
+
+        ser = ApplicationStatusSerializer(application, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+
+        return Response({"message": "Status updated", "status": application.status})
+    

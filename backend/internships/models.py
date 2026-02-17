@@ -1,6 +1,8 @@
 from django.db import models
 from django.conf import settings
 
+# Internship
+#  model represents the internship postings created by companies
 class Internship(models.Model):
     company = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     title = models.CharField(max_length=200)
@@ -15,7 +17,8 @@ class Internship(models.Model):
     def __str__(self):
         return self.title
 
-
+# Application
+#  model represents the applications submitted by students for internships
 class Application(models.Model):
     student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     internship = models.ForeignKey(Internship, on_delete=models.CASCADE)

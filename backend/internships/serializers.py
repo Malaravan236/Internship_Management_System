@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from accounts.models import Application, Internship
-
+from accounts.models import Feedback, Certificate
 
 class InternshipSerializer(serializers.ModelSerializer):
     class Meta:
@@ -37,3 +37,31 @@ class ApplicationSerializer(serializers.ModelSerializer):
         if resume_link is not None:
             attrs["resume_drive_link"] = resume_link
         return attrs
+
+
+
+class FeedbackCreateSerializer(serializers.ModelSerializer):
+    application_id = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = Feedback
+        fields = ["application_id", "rating", "comment"]
+
+    def validate_rating(self, v):
+        if v < 1 or v > 5:
+            raise serializers.ValidationError("Rating must be between 1 and 5.")
+        return v
+
+
+class CertificateSerializer(serializers.ModelSerializer):
+    pdf = serializers.FileField(read_only=True)
+
+    class Meta:
+        model = Certificate
+        fields = ["certificate_no", "issued_at", "verify_token", "pdf", "pdf_url"]
+
+
+class ApplicationStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Application
+        fields = ["status"]
