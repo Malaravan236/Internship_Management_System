@@ -4,7 +4,7 @@ import SuspenseLayout from "./layouts/SuspenseLayout";
 import MainLayout from "./layouts/MainLayout";
 import { RefreshProvider } from "./pages/RefreshContext";
 import VerifyCertificate from "./pages/VerifyCertificate";
-import InternshipListings from "./pages/AvailableInterns"; // ✅ correct path
+import InternshipListings from "./pages/AvailableInterns"; 
 
 function App() {
   return (
@@ -22,7 +22,6 @@ function App() {
                 />
               ))}
 
-              {/* ✅ Force add this route */}
               <Route path="/availableinterns" element={<InternshipListings />} />
               <Route path="/verify-certificate" element={<VerifyCertificate />} />
             </Route>
